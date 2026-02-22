@@ -38,22 +38,11 @@ pip install -e .
 ## Uso básico
 
 ```python
-import os
-from dotenv import load_dotenv
-
 from pbdoc_lib import PBDocClient, LoginError
 
-
-# Carrega variáveis do .env
-load_dotenv()
-
-USUARIO = os.getenv("PBDOC_USER")
-SENHA = os.getenv("PBDOC_PASSWORD")
+USUARIO = "USUARIO"
+SENHA = "Senha"
 NUMPROCESSO = "NUM"
-
-if not USUARIO or not SENHA:
-    raise ValueError("Defina PBDOC_USER e PBDOC_PASSWORD no arquivo .env")
-
 
 with PBDocClient() as client:
     try:
