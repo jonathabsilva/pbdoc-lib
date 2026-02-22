@@ -10,6 +10,7 @@ Biblioteca Python reutilizável para automação do **PBDoc** com Selenium em mo
 - Respostas padronizadas no formato `ApiLikeResponse`
 - Configuração centralizada de URL, timeout e seletores (`PBDocConfig`)
 - Base para adicionar novas funcionalidades com `run_step` e `get_authenticated_page`
+- Consulta de processo com leitura de local atual, tramitações e dados do documento
 
 ## Estrutura
 
@@ -49,6 +50,10 @@ with PBDocClient() as client:
 
         painel = client.get_authenticated_page("siga/public/app/principal")
         print(painel.status_code, painel.message)
+
+        processo = client.consult_process("1234567")
+        print(processo.data["local_atual"])
+        print(processo.data["tramitacoes"])
     except LoginError as exc:
         print(f"Falha no login: {exc}")
 ```

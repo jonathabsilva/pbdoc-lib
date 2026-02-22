@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from urllib.parse import urlencode
 
 
 @dataclass(slots=True)
@@ -18,6 +19,7 @@ class PBDocConfig:
 
     base_url: str = "https://pbdoc.pb.gov.br"
     login_path: str = "/siga/public/app/login"
+    process_view_path: str = "/sigaex/app/expediente/doc/exibir"
     headless: bool = True
     timeout_seconds: int = 20
     selectors: PBDocSelectors = field(default_factory=PBDocSelectors)
@@ -25,3 +27,7 @@ class PBDocConfig:
     @property
     def login_url(self) -> str:
         return f"{self.base_url.rstrip('/')}{self.login_path}"
+
+    def process_view_url(self, process_number: str) -> str:
+        params = urlencode({"sigla": process_number})
+        return f"{self.base_url.rstrip('/')}{self.process_view_path}?{params}"

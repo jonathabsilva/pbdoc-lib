@@ -9,6 +9,7 @@ from selenium.webdriver import ChromeOptions
 from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webdriver import WebDriver
+from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
@@ -105,6 +106,37 @@ class PBDocClient:
             },
         )
 
+    def consult_process(self, process_number: str) -> ApiLikeResponse:
+        """Consulta um processo no SIGA e retorna dados estruturados da página."""
+        self.start()
+        url = self.config.process_view_url(process_number)
+        self.driver.get(url)
+
+        WebDriverWait(self.driver, self.config.timeout_seconds).until(
+            EC.presence_of_element_located((By.TAG_NAME, "body"))
+        )
+
+        body = self.driver.find_element(By.TAG_NAME, "body")
+        local_atual = self._extract_current_location()
+        tramitacoes = self._extract_tramitations()
+        documento_atual = self._extract_document_info()
+
+        return ApiLikeResponse(
+            ok=True,
+            status_code=200,
+            message="Consulta de processo realizada com sucesso.",
+            data={
+                "process_number": process_number,
+                "url": url,
+                "title": self.driver.title,
+                "local_atual": local_atual,
+                "tramitacoes": tramitacoes,
+                "documento_atual": documento_atual,
+                "texto_completo": body.text,
+                "html": self.driver.page_source,
+            },
+        )
+
     def run_step(self, name: str, func: Any, *args, **kwargs) -> ApiLikeResponse:
         """Executa etapa customizada de automação mantendo retorno padronizado."""
         self.start()
@@ -127,6 +159,80 @@ class PBDocClient:
                 "config": asdict(self.config),
             },
         )
+
+    def _extract_current_location(self) -> str | None:
+        candidates = self.driver.find_elements(
+            By.XPATH,
+            "//*[contains(translate(normalize-space(.), 'LOCALIZAÇÃO', 'localização'), 'local') or contains(translate(normalize-space(.), 'ATUAL', 'atual'), 'local atual')]",
+        )
+        for item in candidates:
+            text = item.text.strip()
+            if text and len(text) > 3:
+                return text
+        return None
+
+    def _extract_tramitations(self) -> list[dict[str, str]]:
+        tramitacoes: list[dict[str, str]] = []
+        tables = self.driver.find_elements(By.TAG_NAME, "table")
+
+        for table in tables:
+            headers = [
+                h.text.strip()
+                for h in table.find_elements(By.XPATH, ".//th")
+                if h.text.strip()
+            ]
+            lower_headers = [h.lower() for h in headers]
+            if not headers or not any("tramit" in h or "moviment" in h for h in lower_headers):
+                continue
+
+            for row in table.find_elements(By.XPATH, ".//tr[td]"):
+                cells = [c.text.strip() for c in row.find_elements(By.XPATH, "./td")]
+                if not any(cells):
+                    continue
+                if headers and len(headers) == len(cells):
+                    tramitacoes.append(dict(zip(headers, cells, strict=False)))
+                else:
+                    tramitacoes.append({f"coluna_{i + 1}": v for i, v in enumerate(cells)})
+
+        return tramitacoes
+
+    def _extract_document_info(self) -> dict[str, str]:
+        info: dict[str, str] = {}
+        tables = self.driver.find_elements(By.TAG_NAME, "table")
+        for table in tables:
+            for row in table.find_elements(By.XPATH, ".//tr"):
+                cells = row.find_elements(By.XPATH, "./th|./td")
+                if len(cells) != 2:
+                    continue
+                key = cells[0].text.strip().rstrip(":")
+                value = cells[1].text.strip()
+                if key and value:
+                    info[key] = value
+
+        if info:
+            return info
+
+        labels = self.driver.find_elements(By.XPATH, "//label")
+        for label in labels:
+            key = label.text.strip().rstrip(":")
+            if not key:
+                continue
+            value = self._read_nearby_value(label)
+            if value:
+                info[key] = value
+
+        return info
+
+    def _read_nearby_value(self, label: WebElement) -> str | None:
+        neighbors = label.find_elements(
+            By.XPATH,
+            "./following-sibling::*[1] | ../following-sibling::*[1] | ../*[self::span or self::div]",
+        )
+        for node in neighbors:
+            text = node.text.strip()
+            if text:
+                return text
+        return None
 
     def _build_driver(self) -> WebDriver:
         options = ChromeOptions()
