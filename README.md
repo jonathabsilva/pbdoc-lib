@@ -53,7 +53,7 @@ with PBDocClient() as client:
         print(f"Falha no login: {exc}")
 ```
 
-## Como integrar em outros sistemas (ex.: BravoCompras)
+## Como integrar em outros sistemas 
 
 A ideia é tratar a automação como um adaptador externo:
 
