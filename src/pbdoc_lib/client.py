@@ -24,13 +24,10 @@ class PBDocClient:
         self,
         config: PBDocConfig | None = None,
         *,
-        headless: bool | None = None,
         chrome_driver_path: str | None = None,
         driver: WebDriver | None = None,
     ) -> None:
         self.config = config or PBDocConfig()
-        if headless is not None:
-            self.config.headless = headless
         self._chrome_driver_path = chrome_driver_path
         self._driver = driver
 
@@ -56,21 +53,6 @@ class PBDocClient:
         if self._driver is not None:
             self._driver.quit()
             self._driver = None
-
-    def set_headless(self, enabled: bool, *, restart_driver: bool = True) -> None:
-        """Ativa/desativa headless dinamicamente.
-
-        Se o driver já estiver iniciado e ``restart_driver=True``, reinicia o navegador
-        para aplicar a nova configuração.
-        """
-
-        if self.config.headless == enabled:
-            return
-
-        self.config.headless = enabled
-        if self._driver is not None and restart_driver:
-            self.close()
-            self.start()
 
     def login(self, username: str, password: str) -> ApiLikeResponse:
         self.start()

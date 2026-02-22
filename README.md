@@ -1,6 +1,6 @@
 # pbdoc-lib
 
-Biblioteca Python reutilizável para automação do **PBDoc** com Selenium, desenhada para ser usada como se fosse uma API (retornos padronizados e fluxo encapsulado).
+Biblioteca Python reutilizável para automação do **PBDoc** com Selenium em modo headless, desenhada para ser usada como se fosse uma API (retornos padronizados e fluxo encapsulado).
 
 ## O que já está pronto
 
@@ -8,7 +8,7 @@ Biblioteca Python reutilizável para automação do **PBDoc** com Selenium, dese
 - Login inicial no endereço:
   - `https://pbdoc.pb.gov.br/siga/public/app/login`
 - Respostas padronizadas no formato `ApiLikeResponse`
-- Configuração centralizada de URL, timeout, seletores e execução headless (`PBDocConfig`)
+- Configuração centralizada de URL, timeout e seletores (`PBDocConfig`)
 - Base para adicionar novas funcionalidades com `run_step` e `get_authenticated_page`
 
 ## Estrutura
@@ -53,37 +53,7 @@ with PBDocClient() as client:
         print(f"Falha no login: {exc}")
 ```
 
-## Ativar e desativar headless quando quiser
-
-### 1) Já iniciar em modo visual (não headless)
-
-```python
-from pbdoc_lib import PBDocClient
-
-with PBDocClient(headless=False) as client:
-    client.login("usuario", "senha")
-```
-
-### 2) Alternar durante a execução
-
-```python
-from pbdoc_lib import PBDocClient
-
-client = PBDocClient()  # começa headless por padrão
-client.start()
-
-# Troca para modo visual e reinicia o navegador automaticamente
-client.set_headless(False)
-
-# Volta para headless quando quiser
-client.set_headless(True)
-
-client.close()
-```
-
-> O método `set_headless` reinicia o driver por padrão (`restart_driver=True`) para aplicar a troca de modo imediatamente.
-
-## Como integrar em outros sistemas (ex.: BravoCompras)
+## Como integrar em outros sistemas 
 
 A ideia é tratar a automação como um adaptador externo:
 
@@ -92,17 +62,17 @@ from pbdoc_lib import PBDocClient
 
 
 def buscar_dados_pbdoc(user: str, password: str) -> dict:
-    with PBDocClient(headless=True) as client:
+    with PBDocClient() as client:
         client.login(user, password)
         resposta = client.get_authenticated_page("siga/public/app/principal")
         return resposta.data
 ```
 
-Depois você pode chamar essa função dentro do seu serviço do BravoCompras sem duplicar lógica de Selenium.
+Depois você pode chamar essa função dentro do seu serviço sem duplicar lógica de Selenium.
 
 ## Próximos passos recomendados
 
-1. Mapear os fluxos que você quer expor como “endpoints internos” (ex.: listar documentos, aprovar, anexar).
+1. Mapear os fluxos como “endpoints internos” (ex.: listar documentos, aprovar, anexar).
 2. Criar um método por caso de uso no `PBDocClient`, sempre retornando `ApiLikeResponse`.
 3. Ajustar seletores em `PBDocSelectors` se o layout do PBDoc mudar.
 4. Adicionar testes com mocks de Selenium para cada novo fluxo.
