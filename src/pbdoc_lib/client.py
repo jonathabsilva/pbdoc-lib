@@ -17,6 +17,9 @@ from .config import PBDocConfig
 from .exceptions import LoginError
 from .models import ApiLikeResponse
 
+# ✅ NOVO: importa o extrator
+from .services.extract_pbdoc_process_info import extract_pbdoc_process_info
+
 
 class PBDocClient:
     """Cliente reutilizável para automação do PBDoc com interface semelhante a API."""
@@ -92,6 +95,10 @@ class PBDocClient:
         )
 
     def get_authenticated_page(self, path: str) -> ApiLikeResponse:
+        """
+        Mantive como estava (ele ainda retorna html).
+        Se você quiser também “higienizar” para não retornar html, eu ajusto.
+        """
         self.start()
         url = f"{self.config.base_url.rstrip('/')}/{path.lstrip('/')}"
         self.driver.get(url)
@@ -107,19 +114,23 @@ class PBDocClient:
         )
 
     def consult_process(self, process_number: str) -> ApiLikeResponse:
-        """Consulta um processo no SIGA e retorna dados estruturados da página."""
+        """Consulta um processo no SIGA e retorna dados estruturados (sem salvar HTML)."""
         self.start()
+
         url = self.config.process_view_url(process_number)
         self.driver.get(url)
 
+        # espera o body para garantir carregamento mínimo
         WebDriverWait(self.driver, self.config.timeout_seconds).until(
             EC.presence_of_element_located((By.TAG_NAME, "body"))
         )
 
-        body = self.driver.find_element(By.TAG_NAME, "body")
-        local_atual = self._extract_current_location()
-        tramitacoes = self._extract_tramitations()
-        documento_atual = self._extract_document_info()
+        # ✅ pega o HTML apenas em memória e extrai para dict
+        html = self.driver.page_source
+        parsed = extract_pbdoc_process_info(html)
+
+        # garante que a sigla consultada fique registrada
+        parsed.setdefault("process_number", process_number)
 
         return ApiLikeResponse(
             ok=True,
@@ -129,11 +140,7 @@ class PBDocClient:
                 "process_number": process_number,
                 "url": url,
                 "title": self.driver.title,
-                "local_atual": local_atual,
-                "tramitacoes": tramitacoes,
-                "documento_atual": documento_atual,
-                "texto_completo": body.text,
-                "html": self.driver.page_source,
+                "parsed": parsed,  # ✅ aqui vai o dicionário estruturado
             },
         )
 
@@ -160,10 +167,14 @@ class PBDocClient:
             },
         )
 
+    # ------------------------------------------------------------
+    # Métodos antigos (mantidos por compatibilidade / uso futuro)
+    # ------------------------------------------------------------
     def _extract_current_location(self) -> str | None:
         candidates = self.driver.find_elements(
             By.XPATH,
-            "//*[contains(translate(normalize-space(.), 'LOCALIZAÇÃO', 'localização'), 'local') or contains(translate(normalize-space(.), 'ATUAL', 'atual'), 'local atual')]",
+            "//*[contains(translate(normalize-space(.), 'LOCALIZAÇÃO', 'localização'), 'local') "
+            "or contains(translate(normalize-space(.), 'ATUAL', 'atual'), 'local atual')]",
         )
         for item in candidates:
             text = item.text.strip()
