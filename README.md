@@ -92,12 +92,11 @@ def buscar_dados_pbdoc(user: str, password: str) -> dict:
 
 Depois você pode chamar essa função dentro do seu serviço sem duplicar lógica de Selenium.
 
-## Próximos passos recomendados
+## Próximos passos
 
 1. Mapear os fluxos como “endpoints internos” (ex.: listar documentos, aprovar, anexar).
-2. Criar um método por caso de uso no `PBDocClient`, sempre retornando `ApiLikeResponse`.
-3. Ajustar seletores em `PBDocSelectors` se o layout do PBDoc mudar.
-4. Adicionar testes com mocks de Selenium para cada novo fluxo.
+2. Ajustar seletores em `PBDocSelectors` se o layout do PBDoc mudar.
+3. Adicionar testes com mocks de Selenium para cada novo fluxo.
 
 ## Observação importante
 
