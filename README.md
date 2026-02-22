@@ -38,22 +38,50 @@ pip install -e .
 ## Uso básico
 
 ```python
+import os
+from dotenv import load_dotenv
+
 from pbdoc_lib import PBDocClient, LoginError
 
-USUARIO = "seu_usuario"
-SENHA = "sua_senha"
+
+# Carrega variáveis do .env
+load_dotenv()
+
+USUARIO = os.getenv("PBDOC_USER")
+SENHA = os.getenv("PBDOC_PASSWORD")
+NUMPROCESSO = "NUM"
+
+if not USUARIO or not SENHA:
+    raise ValueError("Defina PBDOC_USER e PBDOC_PASSWORD no arquivo .env")
+
 
 with PBDocClient() as client:
     try:
+        # 1️⃣ Login
         login_response = client.login(USUARIO, SENHA)
-        print(login_response)
+        print("Login:", login_response.message)
 
+        # 2️⃣ Teste básico de página autenticada
         painel = client.get_authenticated_page("siga/public/app/principal")
-        print(painel.status_code, painel.message)
+        print("Painel:", painel.status_code, painel.message)
 
-        processo = client.consult_process("1234567")
-        print(processo.data["local_atual"])
-        print(processo.data["tramitacoes"])
+        # 3️⃣ Consulta processo (exemplo real)
+        processo = client.consult_process(NUMPROCESSO)
+
+        parsed = processo.data["parsed"]
+
+        print("\n=== Processo ===")
+        print("Sigla:", parsed.get("sigla"))
+        print("Situação:", parsed.get("situacao"))
+
+        print("\nMovimentações:")
+        for mov in parsed.get("movimentacoes", []):
+            print(
+                f"{mov.get('tempo_absoluto')} | "
+                f"{mov.get('lotacao_sigla')} | "
+                f"{mov.get('evento')}"
+            )
+
     except LoginError as exc:
         print(f"Falha no login: {exc}")
 ```
