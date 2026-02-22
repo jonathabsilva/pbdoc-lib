@@ -13,7 +13,6 @@ authors = [
 ]
 dependencies = [
   "selenium>=4.41,<5",
-  "beautifulsoup4>=4.14,<5"
 ]
 
 [project.optional-dependencies]
