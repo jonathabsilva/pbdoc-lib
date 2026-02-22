@@ -17,7 +17,7 @@ def main():
     if not usuario or not senha:
         raise ValueError("Variáveis PBDOC_USER ou PBDOC_PASSWORD não definidas no .env")
 
-    processo = "CBMOFN202602317A"
+    processo = ""
 
     config = PBDocConfig(headless=True)
     config.timeout_seconds = 60
