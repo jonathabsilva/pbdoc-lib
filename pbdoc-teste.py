@@ -1,28 +1,38 @@
-from pbdoc_lib import PBDocClient, LoginError
+import os
+from dotenv import load_dotenv
 
-# Substitua pelas suas credenciais
-USUARIO = "seu_usuario"
-SENHA = "sua_senha"
+from pbdoc_lib.client import PBDocClient
+from pbdoc_lib.config import PBDocConfig
+from pbdoc_lib.exceptions import LoginError
+
+
+# Carrega o .env
+load_dotenv()
 
 def main():
-    # Inicializa o cliente com contexto (abre e fecha automaticamente)
-    with PBDocClient() as client:
+    # Lê variáveis do ambiente
+    usuario = os.getenv("PBDOC_USER")
+    senha = os.getenv("PBDOC_PASSWORD")
+
+    if not usuario or not senha:
+        raise ValueError("Variáveis PBDOC_USER ou PBDOC_PASSWORD não definidas no .env")
+
+    # Chrome visível (debug)
+    config = PBDocConfig(headless=True)
+    config.timeout_seconds = 60
+
+    with PBDocClient(config=config) as client:
         try:
-            # Realiza login
-            login_response = client.login(USUARIO, SENHA)
-            print("Login:", login_response)
+            resp = client.login(usuario, senha)
+            print(resp.message)
+            print("URL atual:", resp.data["current_url"])
 
-            # Acessa uma página autenticada
-            # Exemplo de rota interna do PBDoc
-            resposta_painel = client.get_authenticated_page("siga/public/app/principal")
-            print("Status:", resposta_painel.status_code)
-            print("Mensagem:", resposta_painel.message)
-            print("Dados:", resposta_painel.data)
+            input("\nPressione ENTER para fechar o navegador...")
 
-        except LoginError as exc:
-            print(f"Falha no login: {exc}")
-        except Exception as e:
-            print("Erro inesperado:", e)
+        except LoginError as e:
+            print("Falha no login:", e)
+            input("\nPressione ENTER para fechar o navegador...")
+
 
 if __name__ == "__main__":
     main()
