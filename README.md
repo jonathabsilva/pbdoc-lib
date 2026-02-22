@@ -68,7 +68,7 @@ def buscar_dados_pbdoc(user: str, password: str) -> dict:
         return resposta.data
 ```
 
-Depois você pode chamar essa função dentro do seu serviço do BravoCompras sem duplicar lógica de Selenium.
+Depois você pode chamar essa função dentro do seu serviço sem duplicar lógica de Selenium.
 
 ## Próximos passos recomendados
 
