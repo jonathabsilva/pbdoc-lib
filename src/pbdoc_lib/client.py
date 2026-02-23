@@ -125,9 +125,8 @@ class PBDocClient:
             EC.presence_of_element_located((By.TAG_NAME, "body"))
         )
 
-        # ✅ pega o HTML apenas em memória e extrai para dict
-        html = self.driver.page_source
-        parsed = extract_pbdoc_process_info(html)
+        # Extrai dados estruturados direto do DOM com Selenium
+        parsed = extract_pbdoc_process_info(self.driver)
 
         # garante que a sigla consultada fique registrada
         parsed.setdefault("process_number", process_number)
