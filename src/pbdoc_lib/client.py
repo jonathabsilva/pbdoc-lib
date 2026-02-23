@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import asdict
 from typing import Any
 
@@ -140,6 +141,66 @@ class PBDocClient:
                 "url": url,
                 "title": self.driver.title,
                 "parsed": parsed,  # ✅ aqui vai o dicionário estruturado
+            },
+        )
+
+    def create_new_process(self, description: str) -> ApiLikeResponse:
+        """Cria e finaliza um novo processo administrativo genérico no PBDoc."""
+        self.start()
+
+        wait = WebDriverWait(self.driver, self.config.timeout_seconds)
+
+        create_new_button = wait.until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR, "a.btn.btn-success.form-control[href*='expediente/doc/editar']"))
+        )
+        create_new_button.click()
+
+        dropdown_button = wait.until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR, "button#dropdownMenuButton"))
+        )
+        dropdown_button.click()
+
+        process_type_option = wait.until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR, "li.dropdown-item[data-value='780']"))
+        )
+        process_type_option.click()
+
+        lotacao_input = wait.until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, r"#formulario_exDocumentoDTO\.lotacaoDestinatarioSel_sigla"))
+        )
+        lotacao_input.clear()
+        lotacao_input.send_keys("CBM-CCG")
+
+        classificacao_input = wait.until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, r"#formulario_exDocumentoDTO\.classificacaoSel_sigla"))
+        )
+        classificacao_input.clear()
+        classificacao_input.send_keys("04.01.04.07")
+
+        description_input = wait.until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, "textarea#descrDocumento"))
+        )
+        description_input.clear()
+        description_input.send_keys(description)
+
+        save_button = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "button#btnGravar")))
+        save_button.click()
+
+        finalize_button = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "a#finalizar")))
+        finalize_button.click()
+
+        sigla_element = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "h2.sigla-documento")))
+        sigla_text = sigla_element.text.strip()
+        process_number = re.search(r"\b[A-Z]+-\d+\b", sigla_text)
+
+        return ApiLikeResponse(
+            ok=True,
+            status_code=200,
+            message="Novo processo criado e finalizado com sucesso.",
+            data={
+                "process_number": process_number.group(0) if process_number else sigla_text,
+                "url": self.driver.current_url,
+                "title": self.driver.title,
             },
         )
 
