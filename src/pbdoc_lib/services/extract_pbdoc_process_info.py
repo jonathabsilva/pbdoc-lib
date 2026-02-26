@@ -13,10 +13,77 @@ def _first(elements: list[WebElement]) -> WebElement | None:
     return elements[0] if elements else None
 
 
+def _is_plausible_situacao(text: str) -> bool:
+    """
+    Decide se um texto parece ser uma "situação" do processo.
+
+    Aceita, por exemplo:
+      - "1º Volume - Caixa de Entrada (Digital) [CCG]"
+      - "1º Volume - Aguardando Andamento (Digital) [CCG]"
+      - "1ª Via (Arquivo) - Aguardando Andamento"
+      - "2ª Via (Digital) - Em tramitação"
+      - etc.
+
+    Não depende de palavras fixas como "Caixa de Entrada".
+    """
+    t = _clean(text)
+    if not t:
+        return False
+
+    # Padrão "Xª Via (...) - <texto>"
+    if re.search(r"\b\d+ª\s+Via\b", t, re.IGNORECASE) and " - " in t:
+        return True
+
+    # Padrão "Xº Volume - <texto>"
+    if re.search(r"\b\d+º\s+Volume\b", t, re.IGNORECASE) and " - " in t:
+        return True
+
+    # Fallback: se contém "Via" ou "Volume" e tem um separador " - "
+    if (" - " in t) and re.search(r"\b(via|volume)\b", t, re.IGNORECASE):
+        return True
+
+    return False
+
+
+def _pick_best_situacao_from_text(lines: list[str]) -> Optional[str]:
+    """
+    Dado um conjunto de linhas/textos, escolhe a melhor candidata a 'situação'
+    priorizando:
+      1) "<n>ª Via ..." (mais específico)
+      2) "<n>º Volume ..."
+      3) qualquer coisa que passe no _is_plausible_situacao
+    """
+    cleaned = [_clean(x) for x in lines if _clean(x)]
+
+    # 1) Via
+    for t in cleaned:
+        if re.search(r"\b\d+ª\s+Via\b", t, re.IGNORECASE) and " - " in t:
+            return t
+
+    # 2) Volume
+    for t in cleaned:
+        if re.search(r"\b\d+º\s+Volume\b", t, re.IGNORECASE) and " - " in t:
+            return t
+
+    # 3) Plausível
+    for t in cleaned:
+        if _is_plausible_situacao(t):
+            return t
+
+    return None
+
+
 def extract_pbdoc_process_info(driver: WebDriver) -> dict:
     """
-    Extrai informações do processo/documento na tela do PBdoc (/sigaex/app/expediente/doc/exibir?...)
-    usando apenas Selenium.
+    Extrai informações do processo/documento na tela do PBdoc (/sigaex/app/expediente/doc/exibir?...).
+
+    ATUALIZAÇÃO (situação robusta):
+    - 'situacao' agora é extraída tentando, nesta ordem:
+      1) <h3> que pareça situação (Via/Volume + " - ")
+      2) Se não achar, procura no body por uma linha que pareça situação
+         (ex.: "1ª Via (Arquivo) - Aguardando Andamento")
+
+    Assim, o texto da situação pode mudar livremente ("Caixa de Entrada", "Aguardando Andamento", etc.).
     """
     out: dict = {
         "sigla": None,
@@ -27,10 +94,15 @@ def extract_pbdoc_process_info(driver: WebDriver) -> dict:
         "vias": [],
     }
 
+    # ----------------------------
+    # Sigla / ID interno
+    # ----------------------------
     h2 = _first(driver.find_elements(By.CSS_SELECTOR, "h2.sigla-documento"))
     if h2:
         text = _clean(h2.text)
-        sigla_match = re.search(r"\b[A-Z]{2,}-[A-Z]{2,}-\d{4}/\d+\b", text)
+
+        # Aceita 1+ prefixos (ex.: CBM-PRC-2026/00122)
+        sigla_match = re.search(r"\b[A-Z]{2,}(?:-[A-Z]{2,})*-\d{4}/\d+\b", text)
         if sigla_match:
             out["sigla"] = sigla_match.group(0)
 
@@ -39,16 +111,46 @@ def extract_pbdoc_process_info(driver: WebDriver) -> dict:
             out["id_interno"] = _clean(a_id.text).lstrip("#") or None
 
     if not out["sigla"]:
-        m = re.search(r"\b[A-Z]{2,}-[A-Z]{2,}-\d{4}/\d+\b", _clean(driver.title))
+        m = re.search(r"\b[A-Z]{2,}(?:-[A-Z]{2,})*-\d{4}/\d+\b", _clean(driver.title))
         if m:
             out["sigla"] = m.group(0)
 
-    body = _first(driver.find_elements(By.TAG_NAME, "body"))
-    body_text = _clean(body.text) if body else ""
-    m_sit = re.search(r"\b\d+ª Via\s*\(Arquivo\)\s*-\s*[A-Za-zÀ-ÿ ]{3,}", body_text)
-    if m_sit:
-        out["situacao"] = _clean(m_sit.group(0))
+    # ----------------------------
+    # Situação (robusta, sem depender do texto fixo)
+    # ----------------------------
+    # 1) tenta h3
+    h3_texts = [_clean(h3.text) for h3 in driver.find_elements(By.TAG_NAME, "h3")]
+    h3_texts = [t for t in h3_texts if t]
+    out["situacao"] = _pick_best_situacao_from_text(h3_texts)
 
+    # 2) fallback: procura no body por linhas candidatas
+    if not out["situacao"]:
+        body = _first(driver.find_elements(By.TAG_NAME, "body"))
+        body_text = body.text if body else ""
+        # Divide em linhas para aumentar chance de achar a "frase" inteira
+        lines = [x.strip() for x in (body_text or "").splitlines() if x.strip()]
+
+        # Filtra linhas plausíveis
+        candidates = [ln for ln in lines if _is_plausible_situacao(ln)]
+        out["situacao"] = _pick_best_situacao_from_text(candidates)
+
+    # 3) fallback extra: regex direto no texto completo (caso não tenha quebras de linha úteis)
+    if not out["situacao"]:
+        body = _first(driver.find_elements(By.TAG_NAME, "body"))
+        body_text = _clean(body.text) if body else ""
+
+        # Captura "Nª Via ( ... ) - <qualquer coisa até fim da sentença>"
+        m_via = re.search(r"\b\d+ª\s+Via\b.*?-\s*[^\n\r]{3,}", body_text, re.IGNORECASE)
+        if m_via:
+            out["situacao"] = _clean(m_via.group(0))
+        else:
+            m_vol = re.search(r"\b\d+º\s+Volume\b.*?-\s*[^\n\r]{3,}", body_text, re.IGNORECASE)
+            if m_vol:
+                out["situacao"] = _clean(m_vol.group(0))
+
+    # ----------------------------
+    # Documento Interno Produzido
+    # ----------------------------
     doc_box = None
     for card in driver.find_elements(By.CSS_SELECTOR, ".card-sidebar.card"):
         header = _first(card.find_elements(By.CSS_SELECTOR, ".card-header"))
@@ -84,12 +186,12 @@ def extract_pbdoc_process_info(driver: WebDriver) -> dict:
                 normalized[mapping[k]] = v
         out["documento_interno_normalizado"] = normalized
 
+    # ----------------------------
+    # Movimentações
+    # ----------------------------
     mov_table = None
     for tbl in driver.find_elements(By.CSS_SELECTOR, "table.table.table-sm.table-responsive-sm.table-striped"):
-        heads = [
-            _clean(th.text).lower()
-            for th in tbl.find_elements(By.CSS_SELECTOR, "thead th")
-        ]
+        heads = [_clean(th.text).lower() for th in tbl.find_elements(By.CSS_SELECTOR, "thead th")]
         if heads[:4] == ["tempo", "lotação", "evento", "assunto"]:
             mov_table = tbl
             break
@@ -123,6 +225,9 @@ def extract_pbdoc_process_info(driver: WebDriver) -> dict:
 
             out["movimentacoes"].append(item)
 
+    # ----------------------------
+    # Vias
+    # ----------------------------
     vias_box = None
     for card in driver.find_elements(By.CSS_SELECTOR, ".card-sidebar.card"):
         header = _first(card.find_elements(By.CSS_SELECTOR, ".card-header"))
