@@ -43,11 +43,19 @@ def extract_pbdoc_process_info(driver: WebDriver) -> dict:
         if m:
             out["sigla"] = m.group(0)
 
-    body = _first(driver.find_elements(By.TAG_NAME, "body"))
-    body_text = _clean(body.text) if body else ""
-    m_sit = re.search(r"\b\d+ª Via\s*\(Arquivo\)\s*-\s*[A-Za-zÀ-ÿ ]{3,}", body_text)
-    if m_sit:
-        out["situacao"] = _clean(m_sit.group(0))
+    situacao_h3 = _first(driver.find_elements(By.XPATH, "//*[@id='page']/div[2]/div/h3"))
+    if not situacao_h3:
+        situacao_h3 = _first(driver.find_elements(By.XPATH, "/html/body/div[4]/div[2]/div/h3"))
+
+    if situacao_h3:
+        out["situacao"] = _clean(situacao_h3.text) or None
+
+    if not out["situacao"]:
+        body = _first(driver.find_elements(By.TAG_NAME, "body"))
+        body_text = _clean(body.text) if body else ""
+        m_sit = re.search(r"\b\d+ª Via\s*\(Arquivo\)\s*-\s*[A-Za-zÀ-ÿ ]{3,}", body_text)
+        if m_sit:
+            out["situacao"] = _clean(m_sit.group(0))
 
     doc_box = None
     for card in driver.find_elements(By.CSS_SELECTOR, ".card-sidebar.card"):
